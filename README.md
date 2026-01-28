@@ -42,7 +42,3 @@ A Telegram bot for editing and analyzing DOCX documents using AI (Anthropic Clau
 |----------|-------------|
 | `BOT_TOKEN` | Telegram Bot Token from @BotFather |
 | `ANTHROPIC_API_KEY` | Anthropic API Key for Claude |
-
-## License
-
-MIT License
