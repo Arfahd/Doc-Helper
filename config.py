@@ -48,6 +48,11 @@ MAX_CONTENT_CHARS = 15000  # Max chars to send to AI (token safety)
 AI_MAX_TOKENS = 2500  # Max tokens for AI response
 AI_REQUEST_TIMEOUT = 120  # Timeout for AI API calls (seconds)
 
+# --- AI Usage Limits ---
+WEEKLY_ANALYSIS_LIMIT = 10  # Max AI analyses per user per week
+WARNING_THRESHOLD = 8  # Show warning when usage >= this (2 remaining)
+LIMIT_WINDOW_SECONDS = 7 * 24 * 60 * 60  # 7 days in seconds
+
 # --- Messages ---
 MESSAGES = {
     "welcome": (
@@ -127,4 +132,11 @@ MESSAGES = {
     "download_failed": "Failed to download file. Please try again.",
     "unexpected_error": "An unexpected error occurred. Please try again.",
     "ai_timeout": "Analysis timed out. Please try again with a smaller document.",
+    # Usage limits
+    "limit_warning": "You have {remaining} analysis(es) remaining this week.",
+    "limit_reached": (
+        "Weekly limit reached ({limit} analyses).\n\n"
+        "Your limit resets as older requests expire (rolling 7-day window).\n"
+        "Try again later or wait for your oldest request to expire."
+    ),
 }

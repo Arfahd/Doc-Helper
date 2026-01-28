@@ -14,8 +14,9 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from config import MESSAGES
+from config import MESSAGES, WEEKLY_ANALYSIS_LIMIT, WARNING_THRESHOLD
 from states import BotStates
+from utils.usage_limiter import usage_limiter
 from keyboards.inline import (
     analysis_type_keyboard,
     post_analyze_keyboard,
@@ -96,6 +97,17 @@ async def run_analysis(callback: CallbackQuery, state: FSMContext, analysis_type
     """
     user_id = callback.from_user.id
 
+    # Check usage limit BEFORE processing
+    allowed, remaining, limit_msg = usage_limiter.can_use_ai(user_id)
+
+    if not allowed:
+        await callback.message.edit_text(
+            MESSAGES["limit_reached"].format(limit=WEEKLY_ANALYSIS_LIMIT),
+            reply_markup=post_action_keyboard(),
+        )
+        await callback.answer()
+        return
+
     # Get file path
     file_path = session_manager.get_file_path(user_id)
     if not file_path:
@@ -119,6 +131,9 @@ async def run_analysis(callback: CallbackQuery, state: FSMContext, analysis_type
 
     # Run AI analysis
     result, pending_fixes, cost = await review_document(doc_text, analysis_type)
+
+    # Record usage AFTER successful AI call
+    remaining = usage_limiter.record_usage(user_id)
 
     # Store pending fixes if any
     if pending_fixes:
@@ -149,6 +164,13 @@ async def run_analysis(callback: CallbackQuery, state: FSMContext, analysis_type
             )
             + "\n\n---\n\n"
             + MESSAGES["analyze_no_actionable_fixes"]
+        )
+
+    # Add warning if approaching limit
+    used, limit = usage_limiter.get_usage(user_id)
+    if used >= WARNING_THRESHOLD:
+        result_message += (
+            f"\n\n---\n_{MESSAGES['limit_warning'].format(remaining=limit - used)}_"
         )
 
     # Send result

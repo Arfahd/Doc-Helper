@@ -12,8 +12,9 @@ from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from config import MESSAGES
+from config import MESSAGES, WEEKLY_ANALYSIS_LIMIT, WARNING_THRESHOLD
 from states import BotStates
+from utils.usage_limiter import usage_limiter
 from keyboards.inline import (
     fix_confirm_keyboard,
     fix_review_keyboard,
@@ -41,6 +42,16 @@ async def start_fix_scan(message: Message, state: FSMContext, user_id: int):
         state: FSM context
         user_id: User ID
     """
+    # Check usage limit BEFORE processing
+    allowed, remaining, limit_msg = usage_limiter.can_use_ai(user_id)
+
+    if not allowed:
+        await message.answer(
+            MESSAGES["limit_reached"].format(limit=WEEKLY_ANALYSIS_LIMIT),
+            reply_markup=post_action_keyboard(),
+        )
+        return
+
     file_path = session_manager.get_file_path(user_id)
     if not file_path:
         await message.answer(MESSAGES["no_file"])
@@ -61,6 +72,9 @@ async def start_fix_scan(message: Message, state: FSMContext, user_id: int):
 
     # Generate fixes using AI
     fixes, cost = await generate_improvements(doc_text)
+
+    # Record usage AFTER successful AI call
+    remaining = usage_limiter.record_usage(user_id)
 
     if not fixes:
         # No issues found - show post-action menu
@@ -86,6 +100,12 @@ async def start_fix_scan(message: Message, state: FSMContext, user_id: int):
         issues_text += f"\n... and {len(fixes) - 10} more"
 
     text = MESSAGES["fix_found"].format(count=len(fixes), issues=issues_text)
+
+    # Add warning if approaching limit
+    used, limit = usage_limiter.get_usage(user_id)
+    if used >= WARNING_THRESHOLD:
+        text += f"\n\n---\n_{MESSAGES['limit_warning'].format(remaining=limit - used)}_"
+
     await msg.edit_text(text, reply_markup=fix_confirm_keyboard())
     await state.set_state(BotStates.fix_confirm)
 
